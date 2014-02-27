@@ -148,4 +148,5 @@ class TestUnificationErrors(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    TestUnification('test_unify_ellipsis_broadcast').debug()
+    # unittest.main(verbosity=2)

@@ -16,8 +16,8 @@ twos = add(a, a)
 This will set up the following equations:
 
 ```python
-    10, 10, int32 = A... int32
-    10, 10, int32 = A... int32
+    10 * 10 * int32 = A... * int32
+    10 * 10 * int32 = A... * int32
 ```
 
 During this matching process, the system will try to find solutions for the
@@ -33,15 +33,15 @@ type variables, and substitute the solution for the result type, conceptually:
     # The right hand sides (the second element in the two-tuples) come from
     # the blaze function signatures.
     equations = [
-        (dshape('10, 10, int32'), dshape('A... int32')),
-        (dshape('10, 10, int32'), dshape('A... int32')),
+        (dshape('10 * 10 * int32'), dshape('A... * int32')),
+        (dshape('10 * 10 * int32'), dshape('A... * int32')),
     ]
 
     restype = dshape('A... int32')
     solution = unify(equations)     # { TypeVar('A') : [10, 10] }
     concrete_restype = substitute(solution, restype)
 
-    print(concrete_restype) # dshape('10, 10, int32')
+    print(concrete_restype) # dshape('10 * 10 * int32')
 ```
 
 Semantics
@@ -70,8 +70,8 @@ the ```~``` qualifier. For instance, if we were to accept broadcasting in our
     # Equations with coercion semantics
 
     equations = [
-        (dshape('10, 10, int32'), dshape('~A... int32')),
-        (dshape('10, 10, int32'), dshape('~A... int32')),
+        (dshape('10 * 10 * int32'), dshape('~A... * int32')),
+        (dshape('10 * 10 * int32'), dshape('~A... * int32')),
     ]
 ```
 
@@ -82,22 +82,22 @@ hand sides, e.g. the following equations will be valid:
     # Equations with coercion semantics
 
     equation1 = [
-        (dshape('1,  10, int32'), dshape('~A... int32')),
-        (dshape('10, 10, int32'), dshape('~A... int32')),
+        (dshape('1  * 10 * int32'), dshape('~A... * int32')),
+        (dshape('10 * 10 * int32'), dshape('~A... * int32')),
     ]
     # solution1 = { TypeVar('A') : [10, 10] }
 
 
     equation2 = [
-        (dshape('10, int32'), dshape('~A... int32')),
-        (dshape('10, 10, int32'), dshape('~A... int32')),
+        (dshape('10 * int32'), dshape('~A... * int32')),
+        (dshape('10 * 10 * int32'), dshape('~A... * int32')),
     ]
     # solution2 = { TypeVar('A') : [10, 10] }
 
 
     equation3 = [
-        (dshape('10, 10, int32'), dshape('~A... int32')),
-        (dshape('int32'), dshape('~A... int32')),
+        (dshape('10 * 10 * int32'), dshape('~A... * int32')),
+        (dshape('int32'), dshape('~A... * int32')),
     ]
     # solution3 = { TypeVar('A') : [10, 10] }
 ```
@@ -108,8 +108,8 @@ But the below would not be valid:
     # Equations with coercion semantics
 
     invalid_equation = [
-        (dshape('1,  5, int32'), dshape('~A... int32')),
-        (dshape('10, 10, int32'), dshape('~A... int32')),
+        (dshape('1 * 5 * int32'), dshape('~A... * int32')),
+        (dshape('10 * 10 * int32'), dshape('~A... * int32')),
     ]
 
     # '5' and '10' are not compatible!
@@ -125,16 +125,16 @@ For dimensions this means broadcasting, and for dtypes this means casting:
     # In the following equation we allow broadcasting for the first dimension,
     # but not for the second
     dim_equation = [
-        (dshape('1,  10, int32'), dshape('~a, b, int32')),
-        (dshape('10, 10, int32'), dshape('~a, b, int32')),
+        (dshape('1  * 10 * int32'), dshape('~a * b * int32')),
+        (dshape('10 * 10 * int32'), dshape('~a * b * int32')),
     ]
     # dim_solution = { TypeVar('a') : 10, TypeVar('b'): 10 }
 
     # In the following equation we allow casting of the dtype, but no
     # broadcasting
     dtype_equation = [
-        (dshape('10, 10, float64'), dshape('a, b, ~c')),
-        (dshape('10, 10, int32'),   dshape('a, b, ~c')),
+        (dshape('10 * 10 * float64'), dshape('a * b * ~c')),
+        (dshape('10 * 10 * int32'),   dshape('a * b * ~c')),
     ]
     # dtype_solution = { TypeVar('a'): 10, TypeVar('b'): 10,
     #                    TypeVar('c'): float64 }
@@ -164,3 +164,125 @@ Hence the solver proceeds in two steps:
     * Solve all coercion constraints, under the assumptions of the previous
       step
 
+Simplification
+--------------
+
+### Relabeling
+
+The problem is still quite general, so the equations as first simplified.
+First, we need to make sure we can safely map type variables to solutions. To
+to do, we start by relabeling all type variables in the equation. We relabel
+type variables by generating a new unique name for each distinct variable
+within a given context:
+
+    * For each unique type variable on the RHS, assign a new unique name.
+      The context is the entirety of the RHS.
+
+    * For each unique type variable in individual datashapes on the LHS,
+      assign a new unique names within that context.
+
+We also assign fresh type variables to ellipses without any type variables.
+
+Example:
+
+```python
+    # Equations with coercion semantics
+
+    # In the following equation we allow broadcasting for the first dimension,
+    # but not for the second
+    >>> equation = [
+    ...     (dshape('a * b * b * int32'), dshape('a * b * b * int32')),
+    ...     (dshape('a * b * b * int32'), dshape('a * b * b * int32')),
+    ... ]
+    >>>
+    >>> print(relabel(equation))
+    [
+        (dshape('a0 * b0 * b0 * int32'), dshape('a2 * b2 * b2 * int32')),
+        (dshape('a1 * b1 * b1 * int32'), dshape('a2 * b2 * b2 * int32')),
+    ]
+```
+
+As you can see, the first item in the tuples had its type variables relabelled
+locally within the datashape, but the second item in the tuples got assigned
+type variables shared by the entire RHS context. This matches how we think
+about signatures: in the signature ```(a, a) -> a``` we expect all `a`s to be
+the same.
+
+### Ellipses, broadcasting, dimensions, dtypes
+
+After relabeling the type variables, we need to set up the equations that
+will make various aspects of the system work. We allow ellipses only on the
+RHS, and only a single ellipsis is allowed. After solving the equations, a
+solution is obtained which contains a mapping from type variables to solutions.
+This solution is used to substitute the individual solutions in the parameter
+types (the original RHS parameters).
+
+We now generate two types of equations:
+
+    * ellipsis equations: a list of dimensions mapping to a single ellipsis
+    * broadcasting equations: a list of 1-valued dimensions
+    * remaining dimension equations
+    * dtype equation: (dtype_src, dtype_dst)
+
+```python
+    # Ellipses
+
+    >>> equations = [
+    ...     (dshape('10 * 10 * int32'), dshape('~A... * int32')),
+    ...     (dshape('10 * 10 * int32'), dshape('~A... * int32')),
+    ... ]
+    >>> simplify_ellipses(equation)
+    [
+        (dshape('10 * 10'), dshape('~A...')),
+        (dshape('10 * 10'), dshape('~A...')),
+        (dshape('int32'), dshape('int32')),
+        (dshape('int32'), dshape('int32')),
+    ]
+
+    # Broadcasting & dimensions
+
+    >>> equations = [
+    ...     (dshape('     10 * int32'), dshape('~a * ~b * ~int32')),
+    ...     (dshape('10 * 10 * int32'), dshape('~a * ~b * ~int32')),
+    ... ]
+    >>> simplify_ellipses(equation)
+    [
+        # Broadcasting first equation
+        (dshape('1'), dshape('~a')),
+
+        # Remaining dimensions first equation
+        (dshape('10'), dshape('~b')),
+
+        # dimensions second equation
+        (dshape('10 * 10'), dshape('~a * ~b')),
+
+        # DTypes
+        (dshape('int32'), dshape('int32')),
+        (dshape('int32'), dshape('int32')),
+    ]
+
+    # DType
+
+    >>> equations = [
+    ...     (dshape('     10 * int32'),   dshape('~a * ~b * ~dtype')),
+    ...     (dshape('10 * 10 * float32'), dshape('~a * ~b * ~dtype')),
+    ... ]
+    >>> simplify_ellipses(equation)
+    [
+        # Broadcasting first equation
+        (dshape('1'), dshape('~a')),
+
+        # Remaining dimensions first equation
+        (dshape('10'), dshape('~b')),
+
+        # dimensions second equation
+        (dshape('10 * 10'), dshape('~a * ~b')),
+
+        # DTypes
+        (dshape('int32'),   dshape('~dtype')),
+        (dshape('float32'), dshape('~dtype')),
+    ]
+```
+
+These remaining equations should be simple enough to be reasonably handled
+by the unification system, deriving a solution ready for substitution.
