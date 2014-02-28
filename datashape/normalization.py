@@ -35,7 +35,6 @@ def normalize(constraints):
 def normalize_simple(a, b):
     a, b = _strip_datashape(a), _strip_datashape(b)
     a, b = _wrap_ctypes(a, b)
-    print(a, b)
     a, b = normalize_ellipses(a, b)
     a, b = normalize_broadcasting(a, b)
     return a, b
@@ -81,8 +80,6 @@ def normalize_ellipses(a, b):
     partitions = _partition_ellipses_contexts(contexts)
     final_dims, ndims = _broadcast_ellipses_partitions(partitions)
     result1, result2 = _normalize_ellipses(contexts, ndims, a, b)
-    print("resolve ret", result1, result2)
-    # import pdb; pdb.set_trace()
     return _resolve_ellipsis_return_type(final_dims, result1, result2)
 
 

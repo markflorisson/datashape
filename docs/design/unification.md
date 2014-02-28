@@ -1,5 +1,5 @@
-Unifiction
-==========
+Unification
+===========
 The unification system addresses the problem of matching source types to
 destination types. Source types originate from arrays, and destination types
 from blaze function signatures. Example:
@@ -171,7 +171,7 @@ Simplification
 
 The problem is still quite general, so the equations as first simplified.
 First, we need to make sure we can safely map type variables to solutions. To
-to do, we start by relabeling all type variables in the equation. We relabel
+do this, we start by relabeling all type variables in the equation. We relabel
 type variables by generating a new unique name for each distinct variable
 within a given context:
 
@@ -179,7 +179,7 @@ within a given context:
       The context is the entirety of the RHS.
 
     * For each unique type variable in individual datashapes on the LHS,
-      assign a new unique names within that context.
+      assign new unique names within that context.
 
 We also assign fresh type variables to ellipses without any type variables.
 
@@ -206,7 +206,7 @@ As you can see, the first item in the tuples had its type variables relabelled
 locally within the datashape, but the second item in the tuples got assigned
 type variables shared by the entire RHS context. This matches how we think
 about signatures: in the signature ```(a, a) -> a``` we expect all `a`s to be
-the same.
+the same after unification.
 
 ### Ellipses, broadcasting, dimensions, dtypes
 
