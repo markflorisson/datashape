@@ -50,7 +50,7 @@ def tzip(f, a, b, descend=descend):
         return a, b
 
     verify(a, b)
-    result = zip(*starmap(f, zip(a.parameters, b.parameters)))
+    result = list(zip(*starmap(f, zip(a.parameters, b.parameters))))
     params1, params2 = result or [(), ()]
     return (type_constructor(a)(*params1), type_constructor(b)(*params2))
 

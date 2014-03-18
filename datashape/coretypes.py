@@ -705,6 +705,9 @@ class Function(Mono):
         return (isinstance(other, type(self)) and
                 self.parameters == other.parameters)
 
+    def __hash__(self):
+        return 1
+
     def __ne__(self, other):
         return not self == other
 
